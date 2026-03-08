@@ -2,14 +2,27 @@
 
 Step-by-step guide for running the full EventFlow incident response demo.
 
+## Multi-Team Setup
+
+Each team (team1 through team10) has its own isolated deployment:
+
+| Team | Order Service | Payment Service | Branch | Queue |
+|------|--------------|-----------------|--------|-------|
+| team1 | `https://ef-order-team1.salmonbush-13ada168.eastus.azurecontainerapps.io` | `https://ef-payment-team1.salmonbush-13ada168.eastus.azurecontainerapps.io` | `team1` | `order-events-team1` |
+| team2 | `https://ef-order-team2.salmonbush-13ada168.eastus.azurecontainerapps.io` | `https://ef-payment-team2.salmonbush-13ada168.eastus.azurecontainerapps.io` | `team2` | `order-events-team2` |
+| ... | (same pattern for team3-team9) | | | |
+| team10 | `https://ef-order-team10.salmonbush-13ada168.eastus.azurecontainerapps.io` | `https://ef-payment-team10.salmonbush-13ada168.eastus.azurecontainerapps.io` | `team10` | `order-events-team10` |
+
+Replace `<TEAM>` below with your team name (e.g., `team1`).
+
 ## Prerequisites
 
 Before running the demo, ensure:
 
 - [ ] All 4 repos are pushed to `Cognition-Partner-Workshops`
-- [ ] Azure infrastructure is deployed via `app_eventflow-infra`
+- [ ] Azure infrastructure is deployed via `app_eventflow-infra` with `teamCount=10`
 - [ ] Container images are built and pushed to ACR
-- [ ] Container Apps are running and healthy
+- [ ] All 20 Container Apps are running and healthy
 - [ ] Devin API key is configured in the Azure Function
 - [ ] MCP server is configured with Log Analytics credentials
 
@@ -19,12 +32,12 @@ Before running the demo, ensure:
 
 1. **Open the Order Service Swagger UI**
    ```
-   https://<order-service-fqdn>/docs
+   https://ef-order-<TEAM>.salmonbush-13ada168.eastus.azurecontainerapps.io/docs
    ```
 
 2. **Create a USD order** (this works perfectly):
    ```bash
-   curl -X POST https://<order-service-fqdn>/api/orders \
+   curl -X POST https://ef-order-<TEAM>.salmonbush-13ada168.eastus.azurecontainerapps.io/api/orders \
      -H "Content-Type: application/json" \
      -d '{
        "customer_id": "cust-demo-001",
@@ -37,7 +50,7 @@ Before running the demo, ensure:
 
 3. **Show the payment was processed** — check Payment Service:
    ```bash
-   curl https://<payment-service-fqdn>/api/payments
+   curl https://ef-payment-<TEAM>.salmonbush-13ada168.eastus.azurecontainerapps.io/api/payments
    ```
 
 4. **Narrate**: "Our e-commerce order flow works end-to-end. Orders come in, events flow through Azure Service Bus, payments are processed. CI is green, CD deployed this automatically."
@@ -57,7 +70,7 @@ Before running the demo, ensure:
 
 8. **Submit a JPY order** (this will crash the Payment Service):
    ```bash
-   curl -X POST https://<order-service-fqdn>/api/orders \
+   curl -X POST https://ef-order-<TEAM>.salmonbush-13ada168.eastus.azurecontainerapps.io/api/orders \
      -H "Content-Type: application/json" \
      -d '{
        "customer_id": "cust-demo-002",
@@ -72,7 +85,7 @@ Before running the demo, ensure:
 
 10. **Show the Payment Service crashed** — check payments endpoint:
     ```bash
-    curl https://<payment-service-fqdn>/api/payments
+    curl https://ef-payment-<TEAM>.salmonbush-13ada168.eastus.azurecontainerapps.io/api/payments
     ```
     The JPY payment is not in the list (it crashed before being recorded).
 
@@ -113,7 +126,7 @@ Before running the demo, ensure:
 
 19. **Retry the JPY order**:
     ```bash
-    curl -X POST https://<order-service-fqdn>/api/orders \
+    curl -X POST https://ef-order-<TEAM>.salmonbush-13ada168.eastus.azurecontainerapps.io/api/orders \
       -H "Content-Type: application/json" \
       -d '{
         "customer_id": "cust-demo-003",
@@ -126,7 +139,7 @@ Before running the demo, ensure:
 
 20. **Show it works** — check payments:
     ```bash
-    curl https://<payment-service-fqdn>/api/payments
+    curl https://ef-payment-<TEAM>.salmonbush-13ada168.eastus.azurecontainerapps.io/api/payments
     ```
     The JPY payment is now processed successfully.
 

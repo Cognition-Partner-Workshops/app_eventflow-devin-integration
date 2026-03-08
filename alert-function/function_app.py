@@ -39,6 +39,20 @@ def parse_common_alert_schema(payload: dict) -> dict:
     essentials = data.get("essentials", {})
     alert_context = data.get("alertContext", {})
 
+    # Extract team ID from alert context (cloud_RoleName contains ef-payment-teamN)
+    team_id = ""
+    conditions = alert_context.get("conditions", [])
+    for condition in conditions:
+        dimensions = condition.get("dimensions", [])
+        for dim in dimensions:
+            if dim.get("name") == "cloud_RoleName":
+                role_name = dim.get("value", "")
+                if "team" in role_name:
+                    # Extract teamN from e.g. ef-payment-team3
+                    parts = role_name.split("team")
+                    if len(parts) > 1:
+                        team_id = f"team{parts[-1]}"
+
     return {
         "alert_id": essentials.get("alertId", "unknown"),
         "alert_rule": essentials.get("alertRule", "unknown"),
@@ -46,8 +60,9 @@ def parse_common_alert_schema(payload: dict) -> dict:
         "description": essentials.get("description", ""),
         "fired_at": essentials.get("firedDateTime", datetime.now(timezone.utc).isoformat()),
         "condition_type": alert_context.get("conditionType", ""),
-        "conditions": alert_context.get("conditions", []),
+        "conditions": conditions,
         "schema_id": schema_id,
+        "team_id": team_id,
     }
 
 
@@ -65,13 +80,21 @@ def build_devin_prompt(alert_info: dict) -> str:
         for repo in REPOS.split(",")
     )
 
+    team_id = alert_info.get("team_id", "")
+    team_section = ""
+    if team_id:
+        team_section = f"""\n### Team Deployment\n\n**Team**: {team_id}\n**Order Service**: https://ef-order-{team_id}.salmonbush-13ada168.eastus.azurecontainerapps.io\n**Payment Service**: https://ef-payment-{team_id}.salmonbush-13ada168.eastus.azurecontainerapps.io\n**Branch**: `{team_id}` (in both order-service and payment-service repos)\n**Service Bus Queue**: `order-events-{team_id}`\n\nIMPORTANT: Open your fix PR against the `{team_id}` branch of the payment-service repo,\nnot against `main`. This team has its own isolated deployment.\n"""
+        role_filter = f"ef-payment-{team_id}"
+    else:
+        role_filter = "ef-payment"
+
     return f"""## Production Incident Investigation
 
 **Alert**: {alert_info['alert_rule']}
 **Severity**: {alert_info['severity']}
 **Fired at**: {alert_info['fired_at']}
 **Description**: {alert_info['description']}
-
+{team_section}
 ### Context
 
 An alert has fired on the EventFlow payment processing stack. The Payment Service
@@ -85,7 +108,7 @@ passed CI and was deployed.
 ### Investigation Steps
 
 1. Connect to Azure Log Analytics using the MCP server to query recent exceptions
-   from the `eventflow-payment-service` application.
+   from the payment service application (cloud_RoleName contains "{role_filter}").
 2. Identify the root cause from the exception stack traces and log entries.
 3. Trace the issue across the Order Service and Payment Service codebases.
 4. Open a Pull Request on the affected repository with:
@@ -97,8 +120,8 @@ passed CI and was deployed.
 ### MCP Server
 
 Use the Azure Log Analytics MCP server to query logs. Key queries:
-- Recent exceptions: `exceptions | where cloud_RoleName == "eventflow-payment-service" | order by timestamp desc | take 20`
-- Error context: `traces | where cloud_RoleName == "eventflow-payment-service" | where severityLevel >= 3 | order by timestamp desc | take 50`
+- Recent exceptions: `exceptions | where cloud_RoleName == "{role_filter}" | order by timestamp desc | take 20`
+- Error context: `traces | where cloud_RoleName == "{role_filter}" | where severityLevel >= 3 | order by timestamp desc | take 50`
 """
 
 
