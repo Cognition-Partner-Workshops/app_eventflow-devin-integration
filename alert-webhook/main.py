@@ -29,9 +29,15 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DEVIN_API_URL = os.environ.get("DEVIN_API_URL", "https://api.devin.ai/v1")
+DEVIN_API_BASE = os.environ.get("DEVIN_API_BASE", "https://api.devin.ai")
 DEVIN_API_KEY = os.environ.get("DEVIN_API_KEY", "")
+DEVIN_ORG_ID = os.environ.get("DEVIN_ORG_ID", "")
 GITHUB_ORG = "Cognition-Partner-Workshops"
+
+
+def _devin_sessions_url() -> str:
+    """Build the Devin API sessions URL (v3 with org ID)."""
+    return f"{DEVIN_API_BASE}/v3/organizations/{DEVIN_ORG_ID}/sessions"
 
 REPOS = [
     "app_eventflow-order-service",
@@ -151,11 +157,12 @@ async def alert_webhook(request: Request):
 
     prompt = build_prompt(team_id, payload)
 
-    # Call Devin API
+    # Call Devin API (v3)
     try:
+        url = _devin_sessions_url()
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
-                f"{DEVIN_API_URL}/sessions",
+                url,
                 headers={
                     "Authorization": f"Bearer {DEVIN_API_KEY}",
                     "Content-Type": "application/json",
@@ -206,9 +213,10 @@ async def investigate_proxy(body: InvestigateRequest):
         )
 
     try:
+        url = _devin_sessions_url()
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
-                f"{DEVIN_API_URL}/sessions",
+                url,
                 headers={
                     "Authorization": f"Bearer {DEVIN_API_KEY}",
                     "Content-Type": "application/json",
@@ -273,9 +281,10 @@ async def manual_trigger(team_id: str):
     prompt = build_prompt(team_id, mock_payload)
 
     try:
+        url = _devin_sessions_url()
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
-                f"{DEVIN_API_URL}/sessions",
+                url,
                 headers={
                     "Authorization": f"Bearer {DEVIN_API_KEY}",
                     "Content-Type": "application/json",
