@@ -66,13 +66,14 @@ def extract_team_id(payload: dict) -> str:
 
 
 def build_prompt(team_id: str, alert_payload: dict) -> str:
-    """Build the Devin investigation prompt."""
+    """Build the Devin investigation prompt.
+
+    Describes operational symptoms only — does NOT reveal the root cause.
+    Devin must investigate the code and services to figure out what's wrong.
+    """
     data = alert_payload.get("data", {})
     essentials = data.get("essentials", {})
 
-    alert_rule = essentials.get("alertRule", "Unknown Alert")
-    severity = essentials.get("severity", "Unknown")
-    description = essentials.get("description", "Payment processing failure detected")
     fired_at = essentials.get("firedDateTime", datetime.now(timezone.utc).isoformat())
 
     repos_list = "\n".join(
@@ -83,51 +84,45 @@ def build_prompt(team_id: str, alert_payload: dict) -> str:
     order_url = f"https://ef-order-{team_id}.salmonbush-13ada168.eastus.azurecontainerapps.io" if team_id else "https://ef-order-team1.salmonbush-13ada168.eastus.azurecontainerapps.io"
     payment_url = order_url.replace("ef-order-", "ef-payment-")
 
-    return f"""## Production Incident Investigation
-
-**Alert**: {alert_rule}
-**Severity**: {severity}
-**Fired at**: {fired_at}
-**Description**: {description}
-
-### Team Deployment
+    return f"""## Production Incident — Service Outage
 
 **Team**: {team_id}
-**Order Service**: {order_url}
-**Payment Service**: {payment_url}
-**Branch**: `{branch}` (in both order-service and payment-service repos)
-**Service Bus Queue**: `order-events-{team_id}`
+**Severity**: Critical — customer-facing failure
+**Time detected**: {fired_at}
 
-IMPORTANT: Open your fix PR against the `{branch}` branch of the payment-service repo,
-not against `main`. This team has its own isolated deployment.
+### What We Know
 
-### Context
+Our e-commerce platform has two backend services: an **Order Service** that accepts
+customer orders and publishes events, and a **Payment Service** that consumes those
+events and processes payments.
 
-An alert has fired on the EventFlow payment processing stack. The Payment Service
-(System 2) is experiencing errors after the Order Service (System 1) recently
-passed CI and was deployed.
+**Operational symptoms:**
+- Customers placing orders in certain currencies see a long delay followed by a generic "Unable to Process Order" error
+- Orders in USD complete successfully with no issues
+- The Payment Service appears to be crashing or failing intermittently — health checks are failing
+- Affected orders remain stuck in "pending" status and never complete
+- The Order Service is healthy and accepting orders normally — the problem is downstream
+
+### Live Environment
+
+- **Order Service**: {order_url}
+- **Payment Service**: {payment_url}
+- Both services have Swagger docs at `/docs` and health endpoints at `/health`
+- Orders can be viewed at `GET /api/orders` on the Order Service
 
 ### Repositories in this stack
 
 {repos_list}
 
-### Investigation Steps
+All repos use the `{branch}` branch for this team's deployment.
 
-1. Look at the payment service code in `app_eventflow-payment-service`, specifically
-   the payment processor in `app/services/processor.py`.
-2. Identify the root cause from the exception — likely a currency conversion issue
-   where zero-decimal currencies (JPY, KRW, VND) are incorrectly divided by 100.
-3. Open a Pull Request on `app_eventflow-payment-service` against the `{branch}` branch with:
-   - The bug fix: skip division by 100 for zero-decimal currencies
-   - A new test case covering JPY order processing
-   - A clear description of the root cause and fix
-4. Verify the fix passes CI before marking the investigation complete.
+### Your Task
 
-### MCP Server
+1. **Investigate** — Figure out why certain orders are failing. Look at the code, check the service endpoints, and identify the root cause.
+2. **Fix** — Open a Pull Request on the appropriate repository against the `{branch}` branch with the bug fix and a new test case that covers the failure scenario.
+3. **Verify** — Make sure the fix passes CI before marking the investigation complete.
 
-Use the Azure Log Analytics MCP server to query logs. Key queries:
-- Recent exceptions: `exceptions | where cloud_RoleName == "ef-payment-{team_id}" | order by timestamp desc | take 20`
-- Error context: `traces | where cloud_RoleName == "ef-payment-{team_id}" | where severityLevel >= 3 | order by timestamp desc | take 50`
+IMPORTANT: Open your fix PR against the `{branch}` branch, not `main`. This team has its own isolated deployment.
 """
 
 

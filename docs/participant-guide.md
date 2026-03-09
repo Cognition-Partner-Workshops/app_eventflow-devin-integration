@@ -117,46 +117,53 @@ requests
 Copy this into a new Devin session (replace `{N}` with your team number):
 
 ```
-## Production Incident Investigation
+## Production Incident — Service Outage
 
 **Team**: team{N}
-**Alert**: Payment Processing Failure on JPY orders
-**Severity**: Critical
-**Order Service**: https://ef-order-team{N}.salmonbush-13ada168.eastus.azurecontainerapps.io
-**Payment Service**: https://ef-payment-team{N}.salmonbush-13ada168.eastus.azurecontainerapps.io
+**Severity**: Critical — customer-facing failure
 
-### Context
+### What We Know
 
-The EventFlow payment processing stack is experiencing errors. JPY (Japanese Yen)
-orders are accepted by the Order Service but the Payment Service crashes during
-processing. USD orders work correctly.
+Our e-commerce platform has two backend services: an Order Service that accepts
+customer orders and publishes events, and a Payment Service that consumes those
+events and processes payments.
 
-The error is: `ValueError: Amount X.X JPY is below minimum threshold` — the payment
-service incorrectly divides all currency amounts by 100 (converting cents to dollars),
-but JPY is a zero-decimal currency that should not be divided.
+Operational symptoms:
+- Customers placing orders in certain currencies see a long delay followed by a generic "Unable to Process Order" error
+- Orders in USD complete successfully with no issues
+- The Payment Service appears to be crashing or failing intermittently — health checks are failing
+- Affected orders remain stuck in "pending" status and never complete
+- The Order Service is healthy and accepting orders normally — the problem is downstream
+
+### Live Environment
+
+- Order Service: https://ef-order-team{N}.salmonbush-13ada168.eastus.azurecontainerapps.io
+- Payment Service: https://ef-payment-team{N}.salmonbush-13ada168.eastus.azurecontainerapps.io
+- Both services have Swagger docs at /docs and health endpoints at /health
+- Orders can be viewed at GET /api/orders on the Order Service
 
 ### Repositories
 
 - https://github.com/Cognition-Partner-Workshops/app_eventflow-order-service (branch: team{N})
 - https://github.com/Cognition-Partner-Workshops/app_eventflow-payment-service (branch: team{N})
 - https://github.com/Cognition-Partner-Workshops/app_eventflow-infra
-- https://github.com/Cognition-Partner-Workshops/app_eventflow-storefront
+- https://github.com/Cognition-Partner-Workshops/app_eventflow-storefront (branch: team{N})
 
-### Investigation Steps
+### Your Task
 
-1. Look at the payment service code in `app_eventflow-payment-service`, specifically
-   the payment processor in `app/services/processor.py`.
-2. Identify the zero-decimal currency bug in the `convert_to_display_amount()` function.
-3. Open a Pull Request on `app_eventflow-payment-service` against the `team{N}` branch with:
-   - The bug fix: skip division by 100 for zero-decimal currencies (JPY, KRW, VND, etc.)
-   - A new test case covering JPY order processing
-   - Clear PR description explaining the root cause and fix
-4. Verify the fix passes CI.
+1. Investigate — Figure out why certain orders are failing. Look at the code, check the service endpoints, and identify the root cause.
+2. Fix — Open a Pull Request on the appropriate repository against the team{N} branch with the bug fix and a new test case that covers the failure scenario.
+3. Verify — Make sure the fix passes CI before marking the investigation complete.
+
+IMPORTANT: Open your fix PR against the team{N} branch, not main. This team has its own isolated deployment.
 ```
 
 ---
 
-## The Bug Explained
+## For Workshop Facilitators — The Bug Explained
+
+> **Note:** This section is for facilitators only. Do NOT share this with participants —
+> the goal is for Devin to discover the root cause on its own from the symptoms above.
 
 **What happens:**
 1. Customer places a JPY order for ¥12,800 (Mechanical Keyboard)
