@@ -12,9 +12,19 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 app = FastAPI(title="EventFlow Alert Webhook", version="1.0.0")
+
+# Allow storefront origins to call the proxy endpoint
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"https://ef-store-team\d+\..*\.azurecontainerapps\.io",
+    allow_methods=["POST", "GET", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -173,6 +183,59 @@ async def alert_webhook(request: Request):
         logger.exception("Failed to create Devin session")
         return JSONResponse(
             {"error": str(e), "team_id": team_id},
+            status_code=500,
+        )
+
+
+class InvestigateRequest(BaseModel):
+    """Request body for the ops dashboard proxy endpoint."""
+    team_id: str
+    prompt: str
+
+
+@app.post("/investigate")
+async def investigate_proxy(body: InvestigateRequest):
+    """Proxy endpoint for the ops dashboard — accepts a prompt from the
+    storefront UI and forwards it to the Devin API server-side,
+    avoiding browser CORS restrictions."""
+
+    if not DEVIN_API_KEY:
+        return JSONResponse(
+            {"error": "DEVIN_API_KEY not configured", "team_id": body.team_id},
+            status_code=500,
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                f"{DEVIN_API_URL}/sessions",
+                headers={
+                    "Authorization": f"Bearer {DEVIN_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={"prompt": body.prompt},
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        logger.info("Devin session created via proxy for %s: %s", body.team_id, result.get("session_id", "unknown"))
+        return JSONResponse({
+            "status": "investigation_started",
+            "team_id": body.team_id,
+            "devin_session_id": result.get("session_id"),
+            "devin_url": result.get("url"),
+        })
+
+    except httpx.HTTPStatusError as e:
+        logger.error("Devin API error (proxy): %s %s", e.response.status_code, e.response.text)
+        return JSONResponse(
+            {"error": f"Devin API returned {e.response.status_code}", "detail": e.response.text, "team_id": body.team_id},
+            status_code=502,
+        )
+    except Exception as e:
+        logger.exception("Failed to create Devin session (proxy)")
+        return JSONResponse(
+            {"error": str(e), "team_id": body.team_id},
             status_code=500,
         )
 
