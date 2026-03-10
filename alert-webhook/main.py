@@ -103,6 +103,40 @@ events and processes payments.
 - Affected orders remain stuck in "pending" status and never complete
 - The Order Service is healthy and accepting orders normally — the problem is downstream
 
+### Production Log Access
+
+You have Azure CLI access to query production logs. Use these commands to investigate:
+
+```bash
+# Login to Azure (credentials are pre-configured as environment variables)
+az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID -o none
+
+# Query payment service logs for errors (excluding health checks)
+az monitor log-analytics query \\
+  --workspace "4cf2afba-136e-4018-9f2d-42b3dbafc3a8" \\
+  --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(2h) | where ContainerAppName_s contains 'payment' | where Log_s !contains 'GET /health' | order by TimeGenerated desc | take 30 | project TimeGenerated, ContainerAppName_s, Log_s" \\
+  -o table
+
+# Query order service logs
+az monitor log-analytics query \\
+  --workspace "4cf2afba-136e-4018-9f2d-42b3dbafc3a8" \\
+  --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(2h) | where ContainerAppName_s contains 'order' | where Log_s !contains 'GET /health' | order by TimeGenerated desc | take 30 | project TimeGenerated, ContainerAppName_s, Log_s" \\
+  -o table
+
+# Search for specific error patterns
+az monitor log-analytics query \\
+  --workspace "4cf2afba-136e-4018-9f2d-42b3dbafc3a8" \\
+  --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(2h) | where Log_s contains 'ERROR' or Log_s contains 'Exception' or Log_s contains 'Traceback' | order by TimeGenerated desc | take 30 | project TimeGenerated, ContainerAppName_s, Log_s" \\
+  -o table
+```
+
+**IMPORTANT**: Start your investigation by querying these production logs FIRST before looking at the code. The logs will show you exactly what is happening at runtime.
+
+**Azure credentials** (set these as env vars before running az commands):
+- `AZURE_CLIENT_ID`: `634896cd-4b23-401e-88fe-fd6d56862295`
+- `AZURE_CLIENT_SECRET`: `fwH8Q~5yzs0XcE1qqg0MSd6_gPDlevdOFrLsDa7D`
+- `AZURE_TENANT_ID`: `0aade1a4-add3-468e-8198-ad96545fc0da`
+
 ### Live Environment
 
 - **Order Service**: {order_url}
@@ -118,9 +152,10 @@ All repos use the `{branch}` branch for this team's deployment.
 
 ### Your Task
 
-1. **Investigate** — Figure out why certain orders are failing. Look at the code, check the service endpoints, and identify the root cause.
-2. **Fix** — Open a Pull Request on the appropriate repository against the `{branch}` branch with the bug fix and a new test case that covers the failure scenario.
-3. **Verify** — Make sure the fix passes CI before marking the investigation complete.
+1. **Query production logs** — Use the Azure CLI commands above to pull error logs from the payment service and order service. Identify the exception/crash pattern.
+2. **Investigate** — Based on what the logs reveal, examine the source code to understand the root cause.
+3. **Fix** — Open a Pull Request on the appropriate repository against the `{branch}` branch with the bug fix and a new test case that covers the failure scenario.
+4. **Verify** — Make sure the fix passes CI before marking the investigation complete.
 
 IMPORTANT: Open your fix PR against the `{branch}` branch, not `main`. This team has its own isolated deployment.
 """
