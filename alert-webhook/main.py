@@ -84,67 +84,34 @@ def build_prompt(team_id: str, alert_payload: dict) -> str:
     order_url = f"https://ef-order-{team_id}.salmonbush-13ada168.eastus.azurecontainerapps.io" if team_id else "https://ef-order-team1.salmonbush-13ada168.eastus.azurecontainerapps.io"
     payment_url = order_url.replace("ef-order-", "ef-payment-")
 
-    return f"""## Production Incident — Service Outage
+    return f"""## Production Incident
 
 **Team**: {team_id}
-**Severity**: Critical — customer-facing failure
 **Time detected**: {fired_at}
 
-### What We Know
-
-Our e-commerce platform has two backend services: an **Order Service** that accepts
-customer orders and publishes events, and a **Payment Service** that consumes those
-events and processes payments.
-
-**Operational symptoms:**
-- Customers placing orders in certain currencies see a long delay followed by a generic "Unable to Process Order" error
-- Orders in USD complete successfully with no issues
-- The Payment Service appears to be crashing or failing intermittently — health checks are failing
-- Affected orders remain stuck in "pending" status and never complete
-- The Order Service is healthy and accepting orders normally — the problem is downstream
-
-### Production Log Access
-
-You have Azure CLI access to query production logs. Use these commands to investigate:
-
-```bash
-# Login to Azure (credentials are pre-configured as environment variables)
-az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID -o none
-
-# Query payment service logs for errors (excluding health checks)
-az monitor log-analytics query \\
-  --workspace "4cf2afba-136e-4018-9f2d-42b3dbafc3a8" \\
-  --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(2h) | where ContainerAppName_s contains 'payment' | where Log_s !contains 'GET /health' | order by TimeGenerated desc | take 30 | project TimeGenerated, ContainerAppName_s, Log_s" \\
-  -o table
-
-# Query order service logs
-az monitor log-analytics query \\
-  --workspace "4cf2afba-136e-4018-9f2d-42b3dbafc3a8" \\
-  --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(2h) | where ContainerAppName_s contains 'order' | where Log_s !contains 'GET /health' | order by TimeGenerated desc | take 30 | project TimeGenerated, ContainerAppName_s, Log_s" \\
-  -o table
-
-# Search for specific error patterns
-az monitor log-analytics query \\
-  --workspace "4cf2afba-136e-4018-9f2d-42b3dbafc3a8" \\
-  --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(2h) | where Log_s contains 'ERROR' or Log_s contains 'Exception' or Log_s contains 'Traceback' | order by TimeGenerated desc | take 30 | project TimeGenerated, ContainerAppName_s, Log_s" \\
-  -o table
-```
-
-**IMPORTANT**: Start your investigation by querying these production logs FIRST before looking at the code. The logs will show you exactly what is happening at runtime.
-
-**Azure credentials** (set these as env vars before running az commands):
-- `AZURE_CLIENT_ID`: `634896cd-4b23-401e-88fe-fd6d56862295`
-- `AZURE_CLIENT_SECRET`: `fwH8Q~5yzs0XcE1qqg0MSd6_gPDlevdOFrLsDa7D`
-- `AZURE_TENANT_ID`: `0aade1a4-add3-468e-8198-ad96545fc0da`
-
-### Live Environment
+### Impacted Services
 
 - **Order Service**: {order_url}
 - **Payment Service**: {payment_url}
-- Both services have Swagger docs at `/docs` and health endpoints at `/health`
-- Orders can be viewed at `GET /api/orders` on the Order Service
 
-### Repositories in this stack
+Some customer orders are failing. We received reports of orders not completing successfully.
+
+### Production Logs
+
+Query the production logs to understand what is happening. Azure CLI credentials are already configured as environment variables (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`).
+
+```bash
+az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID -o none
+
+az monitor log-analytics query \\
+  --workspace "4cf2afba-136e-4018-9f2d-42b3dbafc3a8" \\
+  --analytics-query "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(2h) | where Log_s !contains 'GET /health' | order by TimeGenerated desc | take 50 | project TimeGenerated, ContainerAppName_s, Log_s" \\
+  -o table
+```
+
+Start by querying the logs. They are the source of truth for what is happening at runtime.
+
+### Repositories
 
 {repos_list}
 
@@ -152,12 +119,12 @@ All repos use the `{branch}` branch for this team's deployment.
 
 ### Your Task
 
-1. **Query production logs** — Use the Azure CLI commands above to pull error logs from the payment service and order service. Identify the exception/crash pattern.
-2. **Investigate** — Based on what the logs reveal, examine the source code to understand the root cause.
-3. **Fix** — Open a Pull Request on the appropriate repository against the `{branch}` branch with the bug fix and a new test case that covers the failure scenario.
-4. **Verify** — Make sure the fix passes CI before marking the investigation complete.
+1. **Query logs** — Pull production logs and determine what is going wrong.
+2. **Investigate** — Examine the source code to understand the root cause of the failures.
+3. **Fix** — Open a Pull Request on the appropriate repository against the `{branch}` branch with the fix.
+4. **Verify** — Make sure the fix passes CI.
 
-IMPORTANT: Open your fix PR against the `{branch}` branch, not `main`. This team has its own isolated deployment.
+Open your fix PR against the `{branch}` branch, not `main`.
 """
 
 
