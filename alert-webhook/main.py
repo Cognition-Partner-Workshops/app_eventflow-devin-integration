@@ -21,7 +21,7 @@ app = FastAPI(title="EventFlow Alert Webhook", version="1.0.0")
 # Allow storefront origins to call the proxy endpoint
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://ef-store-team\d+\..*\.azurecontainerapps\.io",
+    allow_origin_regex=r"https://ef-store-(team\d+|main)\..*\.azurecontainerapps\.io",
     allow_methods=["POST", "GET", "OPTIONS"],
     allow_headers=["*"],
 )
