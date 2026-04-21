@@ -137,6 +137,15 @@ def devops_webhook(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         api_key, org_id = get_config()
+    except ValueError as e:
+        logging.error("Configuration error: %s", e)
+        return func.HttpResponse(
+            json.dumps({"status": "error", "message": str(e)}),
+            status_code=500,
+            mimetype="application/json",
+        )
+
+    try:
         result = create_devin_session(api_key, org_id, prompt)
         session_url = result.get("url", "")
         session_id = result.get("session_id", "")
@@ -149,13 +158,6 @@ def devops_webhook(req: func.HttpRequest) -> func.HttpResponse:
                 "devin_session_id": session_id,
                 "devin_session_url": session_url,
             }),
-            mimetype="application/json",
-        )
-    except ValueError as e:
-        logging.error("Configuration error: %s", e)
-        return func.HttpResponse(
-            json.dumps({"status": "error", "message": str(e)}),
-            status_code=500,
             mimetype="application/json",
         )
     except requests.exceptions.RequestException as e:
