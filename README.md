@@ -52,7 +52,16 @@ JSON schemas for the events flowing through the system:
 - `payment_processed.json` — Event published by Payment Service
 - `alert_payload.json` — Common Alert Schema from Azure Monitor
 
-### 4. Demo Runbook (`docs/`)
+### 4. DevOps Webhook (`devops-webhook/`)
+
+An Azure Function that bridges Azure DevOps work items to Devin sessions:
+- Receives service hook payloads when work items are updated
+- Checks for the `Devin:Discovery` tag (case-insensitive)
+- Extracts title, description, and URL from the work item
+- Calls the Devin API (`POST /v3/organizations/{org_id}/sessions`) to create a session
+- See [`devops-webhook/README.md`](devops-webhook/README.md) for setup instructions
+
+### 5. Demo Runbook (`docs/`)
 
 Step-by-step instructions for running the full demo narrative.
 
