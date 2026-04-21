@@ -102,7 +102,7 @@ else
   echo "  2. Click '+ Create subscription'"
   echo "  3. Select 'Web Hooks' as the service"
   echo "  4. Event: 'Work item updated'"
-  echo "  5. URL: <your-function-url>?code=<function-key>"
+  echo "  5. URL: <your-function-url>"
 fi
 
 echo ""
