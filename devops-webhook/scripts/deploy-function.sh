@@ -70,7 +70,7 @@ fi
 # Deploy the function code
 echo "Deploying function code..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FUNC_DIR="$SCRIPT_DIR/../azure-function"
+FUNC_DIR="$SCRIPT_DIR/.."
 
 cd "$FUNC_DIR"
 func azure functionapp publish "$FUNC_APP_NAME" --python 2>/dev/null || {
@@ -95,13 +95,7 @@ func azure functionapp publish "$FUNC_APP_NAME" --python 2>/dev/null || {
 echo ""
 echo "=== Deployment Complete ==="
 FUNC_URL="https://${FUNC_APP_NAME}.azurewebsites.net/api/devops-webhook"
-echo "Function URL: $FUNC_URL"
+echo "Webhook URL: $FUNC_URL"
 echo ""
-echo "To get the full URL with function key:"
-echo "  az functionapp function keys list \\"
-echo "    --name $FUNC_APP_NAME \\"
-echo "    --resource-group $RESOURCE_GROUP \\"
-echo "    --function-name DevOpsWebhook"
-echo ""
-echo "The webhook URL for Azure DevOps service hook will be:"
-echo "  ${FUNC_URL}?code=<function-key>"
+echo "Use this URL when configuring the Azure DevOps service hook."
+echo "The endpoint uses anonymous auth — no function key required."
